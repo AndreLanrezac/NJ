@@ -1,3 +1,18 @@
+
+
+Table1 = matrix (c(0,2,4,6,6,8,
+                   2,0,4,6,6,8,
+                   4,4,0,6,6,8,
+                   6,6,6,0,4,8,
+                   6,6,6,4,0,8,
+                   8,8,8,8,8,0),6,6)
+
+
+
+colnames(Table1)=LETTERS[1:6]  
+rownames(Table1) = colnames(Table1)
+Table1
+
 ########### Erratum?
 
 ### There was a 'tmp4' in the is.additive function, which is to be replaced by 'tmp2'
@@ -18,8 +33,25 @@
 #  return (res)
 #}
 
+# Calcul des Ui : fonctions sumDist & sumDist.all
+sumDist = function(s, D){
+  somme <- 0
+  somme <- rowSums(D)
+  return( somme[s] )
+}
+
+sumDist.all = function(D){
+  res=c()
+  S=colnames(D)
+  for (i in S){
+    res = c(res, sumDist(i,D)/(ncol(D)-2))
+  }
+  names(res)=S #what is the point of this line?
+  return(res)
+}
 
 
+ar.Ui <- sumDist.all(Table1)
 
 ### Following the same strategy as in UPGMA, implement the NJ algorithm, then plot the results for the different tables
 
