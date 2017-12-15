@@ -1,3 +1,4 @@
+source("/Users/andre/Documents/UPMC/M1\ BIM\ S1/AAGB/LaurentDavid/phyPlot.R")
 
 # Initialisation de la matrice test
 Table1 = matrix (c(0,2,4,6,6,8,
@@ -32,18 +33,31 @@ sumDist.all = function(D){
 }
 
 QijCalc = function (D,c1,c2){
-  ar.Ui <- sumDist.all(D) # Calcul des Ui
-  return (matrix ( c(D[c1,c2] - ar.Ui[c1] - ar.Ui[c2]),1,1 ))
+  tmp1 = D
+  tmp1[which(!is.finite(tmp1))] <- 0
+  ar.Ui <- sumDist.all(tmp1) # Calcul des Ui
+  return (matrix ( c(tmp1[c1,c2] - ar.Ui[c1] - ar.Ui[c2]),1,1 ))
+}
+
+UiCalc = function (D,col){
+  tmp1 = D
+
+  tmp1[which(!is.finite(tmp1))] <- 0
+  ar.Ui <- sumDist(col,tmp1) # Calcul des Ui
+
+  ar.Ui <- ar.Ui/(ncol(tmp1)-2)
+
+  return (ar.Ui)
 }
 
 minQij = function (D){
-  
-  combi = combn(colnames(Table1),2) #retourne toutes les combinaisons de 2 éléments (couple)
+  combi = combn(colnames(D),2) #retourne toutes les combinaisons de 2 éléments (couple)
   ar.Qij = c()
   i=1
-  while (i<ncol(combi)){ # on parcoure toutes les combinaison
+  while (i<=ncol(combi)){ # on parcoure toutes les combinaison
     cluster1 = combi[1,i] # cluster 1 de la combinaison i 
     cluster2 = combi[2,i] # cluster 2 de la combinaison i
+
     Qij <- QijCalc(D,cluster1,cluster2) # calcul du Qij des deux cluster
     colnames(Qij) <- paste(cluster1,cluster2,sep=",") # on affecter à Qij le label des 2 cluster
     ar.Qij = cbind(ar.Qij , Qij) # on remplie la matrice ar.Qij avec un nouveau Qij des combinaisons
@@ -52,20 +66,6 @@ minQij = function (D){
   NomClustersMin <- matrix(c(combi[,which.min(ar.Qij)]),1,2) # on récupère les labels des cluster dont le Qij est le minimum
   Ind <- which (D == D[NomClustersMin],arr.ind = TRUE)[1,]
   return (matrix(c(Ind),1,2)) # retourne les indices du cluster dont le Qij est le min
-}
-
-cluster.dist = function(D, c1, c2){
-  dist = 0
-  c1_split <- strsplit(c1, ",")[[1]]
-  c2_split <- strsplit(c2, ",")[[1]]
-  for (i in c1_split){
-    for (j in c2_split){
-      dist <- dist + D[i,j]
-    }
-  }
-  dist <- (dist/ 2)
-
-  return (dist)
 }
 
 newDist.mat = function(DD, D, i, j){
@@ -82,9 +82,13 @@ newDist.mat = function(DD, D, i, j){
   new.clust=paste(c1,c2,sep=",") # concatenation of the 2 clusters name with ","
   newClust.vect = c()
   other.clust = setdiff(colnames(D),c(c1,c2)) # what does it do?
-  for (k in other.clust){
-    newClust.vect = c(newClust.vect, cluster.dist(DD,k,new.clust) ) #--------------------------
 
+  for (k in other.clust){
+    distNewClust = (D[k,c1]+ D[k,c2] -D[c1,c2])/2
+    
+
+    newClust.vect = c(newClust.vect, distNewClust  ) #--------------------------
+    
   }
   # describe what each of the following lines do:
   newClust.vect = c(newClust.vect,Inf)
@@ -109,13 +113,21 @@ NJ = function (D){
                        height=as.numeric(rep(0,length(leaves))), # ligne de 0 de longeur nombre de feuilles
                        stringsAsFactors = F) 
 
-   while(dim(tmp)[1]>1){
+   while(dim(tmp)[1]>2){
+
 	 clust.names = colnames(tmp)
 	 # on va déterminer les indices des cluster à regrouper à partir du Qi,i min
-	 min.ind = minQij(D) #indice du min de tmp
+
+	 min.ind = minQij(tmp) #indice du min de tmp
 	 min.dist = tmp[min.ind]
 	 desc1 = colnames(tmp)[min.ind[1]]
 	 desc2 = colnames(tmp)[min.ind[2]]
+	 Ddesc1_2 = tmp[desc1,desc2]
+	 br1.lgth = (Ddesc1_2 + UiCalc(tmp,min.ind[1]) - UiCalc(tmp,min.ind[2]))/2
+	 br2.lgth = (Ddesc1_2 + UiCalc(tmp,min.ind[2]) - UiCalc(tmp,min.ind[1]))/2
+	 
+	 
+	 
 	 tmp = newDist.mat(D, tmp, min.ind[1], min.ind[2]) # ---------------------------------------------
 	 new.clust = colnames(tmp)[dim(tmp)[2]]
 
@@ -127,22 +139,52 @@ NJ = function (D){
 	   desc2 = (paste(sort(unlist(strsplit(desc2, ","))), collapse = ",")) # ----------------
 	   
      To = c(To, desc1, desc2)
-     
-     
-     br1.lgth = cluster.dist(D, desc1, desc2)
-     br2.lgth = br1.lgth
+
      desc1.height = Heights$height[which(Heights$node==desc1)]
      desc2.height = Heights$height[which(Heights$node==desc2)]
-     Length=c(Length, br1.lgth-desc1.height, br2.lgth-desc2.height)
+     Length=c(Length, br1.lgth, br2.lgth)
 
      #new node height
      new.height = newNode.height(Heights, new.clust, desc1, desc2, 
-                                 br1.lgth-desc1.height, 
-                                 br2.lgth-desc2.height)
+                                 br1.lgth, 
+                                 br2.lgth)
      Heights = rbind(Heights, 
                      data.frame(node=new.clust,
                                 height=new.height))
    }
+   # Terminaison
+    new.clust = (paste(sort(unlist(strsplit(colnames(tmp), ","))), collapse = ",")) # ------------
+    print (new.clust)
+    desc1 = colnames(tmp)[1]
+    desc2 = colnames(tmp)[2]
+    Ddesc1_2 = tmp[desc1,desc2]
+    
+    br1.lgth = Ddesc1_2
+    br2.lgth = Ddesc1_2
+  
+    ### tree construction :
+    From = c(From, rep (new.clust,2))
+    desc1 = (paste(sort(unlist(strsplit(desc1, ","))), collapse = ",")) # ----------------
+    desc2 = (paste(sort(unlist(strsplit(desc2, ","))), collapse = ",")) # ----------------
+    
+    To = c(To, desc1, desc2)
+    
+    desc1.height = Heights$height[which(Heights$node==desc1)]
+    desc2.height = Heights$height[which(Heights$node==desc2)]
+    Length=c(Length, br1.lgth, br2.lgth)
+    
+    #new node height
+    new.height = newNode.height(Heights, new.clust, desc1, desc2, 
+                                br1.lgth, 
+                                br2.lgth)
+    Heights = rbind(Heights, 
+                    data.frame(node=new.clust,
+                               height=new.height))
+    
+
+    
+  
+   # ------------
    root = paste(colnames(D),collapse=",")
    edges = data.frame(From,To,Length, stringsAsFactors = F)
    edges <- edges[nrow(edges):1,] # ----------------------- pas obligatoire
@@ -151,7 +193,6 @@ NJ = function (D){
   
 }
 }
-Table1
 tree = NJ(Table1)
-print (tree)
-#phy.plot(tree)
+print(tree)
+phy.plot(tree)
